@@ -1,0 +1,38 @@
+{
+  "name": "simple-websockets-chat-app",
+  "version": "1.0.0",
+  "description": "demo app for learning websockets capabilities",
+  "scripts": {
+    "test": "jest",
+    "lint": "tslint 'src/**/*.ts?(x)' || exit 0",
+    "lint:fix": "tslint 'src/**/*.ts?(x)' --fix",
+    "prebuild": "rm -rf lib/",
+    "build": "tsc",
+    "postbuild": "ts-node tools/buildTemplate.ts",
+    "predeploy": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jasonwong26/simple-websockets-chat-app.git"
+  },
+  "author": "Jason Wong",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jasonwong26/simple-websockets-chat-app/issues"
+  },
+  "homepage": "https://github.com/jasonwong26/simple-websockets-chat-app#readme",
+  "dependencies": {
+    "aws-sdk": "^2.686.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^25.2.3",
+    "colors": "^1.4.0",
+    "fs": "0.0.1-security",
+    "jest": "^26.0.1",
+    "ts-jest": "^26.1.0",
+    "ts-node": "^8.10.2",
+    "tslint": "^6.1.2",
+    "tslint-config-prettier": "^1.18.0",
+    "typescript": "^3.9.3"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "extends": ["tslint:recommended", "tslint-config-prettier"],
+  "linterOptions": {
+    "exclude": [
+      "config/**/*.js",
+      "node_modules/**/*.ts",
+      "coverage/lcov-report/*.js"
+    ]
+  },
+  "rules": {
+    "ordered-imports": false,
+    "interface-name": [true, "never-prefix"],
+    "semicolon": [true, "always", "ignore-interfaces"],
+    "quotemark": [true, "double", "avoid-escape"],
+    "arrow-parens": [true, "ban-single-arg-parens"],
+    "trailing-comma": [ true,
+                        {
+                          "multiline": {
+                            "objects": "never",
+                            "arrays": "never",
+                            "functions": "never",
+                            "typeLiterals": "ignore"
+                          },
+                          "esSpecCompliant": true
+                        }
+                      ],
+    "member-access": false,
+    "no-var-requires": false,
+    "max-line-length": false,
+    "object-literal-sort-keys": false,
+    "curly":[true, "ignore-same-line"],
+    "member-ordering": [ true,
+                    {
+                      "order": [
+                        "static-field",
+                        "instance-field",
+                        "constructor",
+                        "instance-method"
+                      ]
+                    }],
+    "no-console": {
+      "severity": "warning"
+    },
+    "no-debugger": {
+      "severity": "warning"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    //### compiler behaviors ###
+    "target": "es5",
+    "module": "commonjs",
+    "declaration": true,
+    "outDir": "./lib",
+    "strict": true,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    // ### Needed for Jest testing ###
+    "jsx": "react",
+    "esModuleInterop": true,
+
+    //### typescript rules ###
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "strictNullChecks": true
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/**/*test.ts"
+  ]
+}

@@ -1,7 +1,20 @@
+# From forked .gitignore
 *.iml
 .idea/
 .aws-sam/
-packaged.yaml
+
+# forked artifacts
+forked/packaged.yaml
+
+# Dependencies
 node_modules/
 package-lock.json
+
+# Developer Files
 DeveloperNotes.md
+
+# Local settings
+.env
+
+# build files
+lib/
