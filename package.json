@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "demo app for learning websockets capabilities",
   "scripts": {
-    "test": "jest",
+    "test": "jest --config jestconfig.json",
+    "test:watch": "jest --config jestconfig.json --watch",
     "lint": "tslint 'src/**/*.ts?(x)' || exit 0",
     "lint:fix": "tslint 'src/**/*.ts?(x)' --fix",
     "prebuild": "rm -rf lib/",
