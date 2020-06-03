@@ -1,18 +1,8 @@
 import AWS from "aws-sdk";
 
-interface Event {
-  body: string
-  requestContext: {
-    connectionId: string
-    domainName: string
-    stage: string
-  }
-}
-interface Output {
-  statusCode: number 
-  body: string 
-}
-type AsyncEventHandler = (event: Event) => Promise<Output>;
+import { Event, Response } from "../_types";
+
+type AsyncEventHandler = (event: Event) => Promise<Response>;
 type PutItemInput = AWS.DynamoDB.DocumentClient.PutItemInput;
 
 const TABLE_NAME = process.env.TABLE_NAME!;

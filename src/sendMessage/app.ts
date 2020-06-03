@@ -1,30 +1,31 @@
 import AWS from "aws-sdk";
 
-interface Event {
-  body: string
-  requestContext: {
-    connectionId: string
-    domainName: string
-    stage: string
-  }
-}
-interface Output {
-  statusCode: number 
-  body: string 
-}
+import { Event, Response } from "../_types";
 
+interface Request {
+  message: string,
+  channel: string,
+  data: string
+}
+interface Input {
+  endPoint: string,
+  connectionId: string,
+  action: string,
+  channel: string,
+  message: string
+}
 interface ChatKeys {
   pk: string,
   sk: string,
 }
 interface ChatLog extends ChatKeys {
-  log: ChatLogEntry[]
+  log: ChatEntry[]
 }
-interface ChatLogEntry {
+interface ChatEntry {
   connectionId: string,
   message: string
 }
-type AsyncEventHandler = (event: Event) => Promise<Output>;
+type AsyncEventHandler = (event: Event) => Promise<Response>;
 type ScanInput = AWS.DynamoDB.DocumentClient.ScanInput;
 type ScanOutput = AWS.DynamoDB.DocumentClient.ScanOutput;
 type GetItemInput = AWS.DynamoDB.DocumentClient.GetItemInput;
@@ -41,33 +42,40 @@ const ddb = new AWS.DynamoDB.DocumentClient({
 });
 
 export const handler: AsyncEventHandler = async event => {
-  let connections: ScanOutput;
-  try {
-    await writeToContentLog(event);
-    connections = await getConnectionsFromDb();
-  } catch (e) {
-    return { statusCode: 500, body: e.stack };
-  }
+  console.log("sending message", { event });
 
-  const postCalls = pushToAllConnections(connections, event);
   try {
-      await Promise.all(postCalls);
+    const input = mapToInput(event);
+    await writeToContentLog(input);
+    const connections = await getConnectionsFromDb();
+    const postCalls = pushToAllConnections(connections, input);
+    await Promise.all(postCalls);
   } catch (e) {
+    console.log("Fatal error", { error: e });
     return { statusCode: 500, body: e.stack };
   }
 
   return { statusCode: 200, body: "Data sent." };
 };
-const writeToContentLog = async (event: Event) => {
-  console.log(`logging event to ${CONTENT_TABLE_NAME} table`, event);
-  const chatLog = await getOrCreateLog();
-  const chatEntry = mapToLogEntry(event);
+const mapToInput = (event: Event) => {
+  const request: Request = JSON.parse(event.body);
+  const { connectionId, domainName, stage } = event.requestContext;
+  const endPoint = `${domainName}/${stage}`;
+  const input: Input = { action: request.message, channel: request.channel, message: request.data, connectionId, endPoint };
+  return input;
+};
+
+const writeToContentLog = async (input: Input) => {
+  const chatLog = await getOrCreateLog(input);
+  const { connectionId, message } = input;
+  const chatEntry: ChatEntry = { connectionId, message };
   chatLog.log.push(chatEntry);
   await saveLogToDb(chatLog);
-}
-const getOrCreateLog: () => Promise<ChatLog> = async () => {
+};
+const getOrCreateLog: (input: Input) => Promise<ChatLog> = async (input) => {
+  const { channel } = input;
   const keys = {
-    pk: "Channel#1",
+    pk: channel ?? "Channel#1",
     sk: getContentSk()
   };
   const getParams: GetItemInput = { 
@@ -76,11 +84,12 @@ const getOrCreateLog: () => Promise<ChatLog> = async () => {
   };  
   
   const dbLog = await ddb.get(getParams).promise();
-  if(!dbLog.Item) 
+  if(!dbLog.Item) {
     return {...keys, log: [] };
+  }
 
   return dbLog.Item as ChatLog;
-}
+};
 const saveLogToDb = async (log: ChatLog) => {
   const putParams: PutItemInput = { 
     TableName: CONTENT_TABLE_NAME, 
@@ -88,7 +97,7 @@ const saveLogToDb = async (log: ChatLog) => {
   }; 
   
   await ddb.put(putParams).promise();
-}
+};
 
 const getConnectionsFromDb = async () => {
   const scanParams: ScanInput = { 
@@ -99,18 +108,16 @@ const getConnectionsFromDb = async () => {
 
   return connectionData;
 };
-const pushToAllConnections = (connections: ScanOutput, event: Event) => {
+const pushToAllConnections = (connections: ScanOutput, input: Input) => {
   if(!connections?.Items) return [];
 
   const api = new AWS.ApiGatewayManagementApi({
     apiVersion: "2018-11-29",
-    endpoint: event.requestContext.domainName + "/" + event.requestContext.stage
+    endpoint: input.endPoint
   });
-  const message = JSON.parse(event.body).data;
-
   return connections.Items.map(async ({ connectionId }) => {
     try {
-      await pushToConnection(api, connectionId, message);
+      await pushToConnection(api, input);
     } catch (e) {
       if (e.statusCode === 410) {
         console.log(`Found stale connection, deleting connection: ${connectionId}`);
@@ -121,10 +128,10 @@ const pushToAllConnections = (connections: ScanOutput, event: Event) => {
     }
   });  
 };
-const pushToConnection = async (api: AWS.ApiGatewayManagementApi, connectionId: string, message: string) => {
+const pushToConnection = async (api: AWS.ApiGatewayManagementApi, input: Input) => {
   const postRequest: PostToConnectionRequest = {
-    ConnectionId: connectionId, 
-    Data: message
+    ConnectionId: input.connectionId, 
+    Data: input.message
   };
   await api.postToConnection(postRequest).promise();
 };
@@ -136,21 +143,11 @@ const deleteConnectionFromDb = async (connectionId: string) => {
   await ddb.delete(deleteParams).promise();
 };
 
-export const mapToLogEntry = (event: Event) => {
-  const connectionId = event.requestContext.connectionId;
-  const message = JSON.parse(event.body).data;
-  const log: ChatLogEntry = { 
-    connectionId, 
-    message 
-  };
-
-  return log;
-}
 export const getContentSk = (date: Date = new Date()) => {
-  var timezoneOffset = date.getMinutes() + date.getTimezoneOffset();
-  var timestamp = date.getTime() + timezoneOffset * 1000;
-  var correctDate = new Date(timestamp);
-  
+  const timezoneOffset = date.getMinutes() + date.getTimezoneOffset();
+  const timestamp = date.getTime() + timezoneOffset * 1000;
+  const correctDate = new Date(timestamp);  
   correctDate.setUTCHours(0, 0, 0, 0);
+
   return `ChatLog#${correctDate.toISOString()}`;
-}
+};
