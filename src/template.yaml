@@ -129,11 +129,27 @@ Resources:
         AttributeType: S
       - AttributeName: sk
         AttributeType: S
+      - AttributeName: type
+        AttributeType: S
+      - AttributeName: typeSk
+        AttributeType: S
       KeySchema:
       - AttributeName: pk
         KeyType: HASH
       - AttributeName: sk
         KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: ByType
+        KeySchema: 
+        - AttributeName: type
+          KeyType: HASH
+        - AttributeName: typeSk
+          KeyType: RANGE
+        Projection: 
+          ProjectionType: KEYS_ONLY
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5

@@ -1,12 +1,11 @@
 export interface Event {
   isBase64Encoded: boolean
-  body: string,
   requestContext: {
     apiId: string
     connectionId: string,
     domainName: string,
     routeKey: string,
-    messageId: string,
+    messageId: string | null,
     eventType: string,
     extendedRequestId: string,
     requestTime: string,
@@ -15,7 +14,15 @@ export interface Event {
     connectedAt: number,
     requestTimeEpoch: number,
     requestId: string,
-  },
+  }
+}
+export interface ConnectEvent extends Event {
+  queryStringParameters?: {
+    [key: string]: string
+  }
+}
+export interface MessageEvent extends Event {
+  body: string,
 }
 
 export interface Response {

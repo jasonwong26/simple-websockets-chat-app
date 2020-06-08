@@ -1,6 +1,6 @@
 import AWS from "aws-sdk";
 
-import { Event, Response } from "../_types";
+import { MessageEvent, Response } from "../_types";
 
 interface Request {
   message: string,
@@ -14,20 +14,19 @@ interface Input {
   channel: string,
   message: string
 }
-interface ChatKeys {
+interface ChatLog {
   pk: string,
   sk: string,
-}
-interface ChatLog extends ChatKeys {
   log: ChatEntry[]
 }
 interface ChatEntry {
   connectionId: string,
   message: string
 }
-type AsyncEventHandler = (event: Event) => Promise<Response>;
-type ScanInput = AWS.DynamoDB.DocumentClient.ScanInput;
-type ScanOutput = AWS.DynamoDB.DocumentClient.ScanOutput;
+type AsyncEventHandler = (event: MessageEvent) => Promise<Response>;
+type QueryInput = AWS.DynamoDB.DocumentClient.QueryInput;
+type QueryOutput = AWS.DynamoDB.DocumentClient.QueryOutput;
+
 type GetItemInput = AWS.DynamoDB.DocumentClient.GetItemInput;
 type PutItemInput = AWS.DynamoDB.DocumentClient.PutItemInput;
 
@@ -36,9 +35,11 @@ type PostToConnectionRequest = AWS.ApiGatewayManagementApi.PostToConnectionReque
 
 const TABLE_NAME = process.env.TABLE_NAME!;
 const CONTENT_TABLE_NAME = process.env.CONTENT_TABLE_NAME!;
+const AWS_REGION = process.env.AWS_REGION!;
+
 const ddb = new AWS.DynamoDB.DocumentClient({
   apiVersion: "2012-08-10", 
-  region: process.env.AWS_REGION
+  region: AWS_REGION
 });
 
 export const handler: AsyncEventHandler = async event => {
@@ -47,17 +48,21 @@ export const handler: AsyncEventHandler = async event => {
   try {
     const input = mapToInput(event);
     await writeToContentLog(input);
-    const connections = await getConnectionsFromDb();
-    const postCalls = pushToAllConnections(connections, input);
-    await Promise.all(postCalls);
-  } catch (e) {
-    console.log("Fatal error", { error: e });
-    return { statusCode: 500, body: e.stack };
+    await pushToAllListeners(input);
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return { statusCode: 400, body: "Failed to send: " + JSON.stringify(err) };
+    }
+    console.log("Fatal error", { error: err });
+    return { statusCode: 500, body: err.stack };
   }
 
   return { statusCode: 200, body: "Data sent." };
 };
-const mapToInput = (event: Event) => {
+const mapToInput = (event: MessageEvent) => {
+  if(!event.body) {
+    throw new ValidationError("missing required request body");
+  }
   const request: Request = JSON.parse(event.body);
   const { connectionId, domainName, stage } = event.requestContext;
   const endPoint = `${domainName}/${stage}`;
@@ -72,11 +77,11 @@ const writeToContentLog = async (input: Input) => {
   chatLog.log.push(chatEntry);
   await saveLogToDb(chatLog);
 };
-const getOrCreateLog: (input: Input) => Promise<ChatLog> = async (input) => {
+const getOrCreateLog: (input: Input) => Promise<ChatLog> = async input => {
   const { channel } = input;
   const keys = {
     pk: channel ?? "Channel#1",
-    sk: getContentSk()
+    sk: getContentSk(),    
   };
   const getParams: GetItemInput = { 
     TableName: CONTENT_TABLE_NAME, 
@@ -99,16 +104,29 @@ const saveLogToDb = async (log: ChatLog) => {
   await ddb.put(putParams).promise();
 };
 
-const getConnectionsFromDb = async () => {
-  const scanParams: ScanInput = { 
-    TableName: TABLE_NAME!, 
-    ProjectionExpression: "connectionId" 
-  };
-  const connectionData = await ddb.scan(scanParams).promise();
-
-  return connectionData;
+const pushToAllListeners: (input: Input) => Promise<void> = async input => {
+  const connections = await fetchAllConnections(input);
+  const pushCalls = pushToAllConnections(connections, input);
+  await Promise.all(pushCalls);
 };
-const pushToAllConnections = (connections: ScanOutput, input: Input) => {
+const fetchAllConnections: (input: Input) => Promise<QueryOutput> = async input => {
+  const queryParams: QueryInput = {
+    TableName: CONTENT_TABLE_NAME,
+    KeyConditionExpression: "#pk = :pk AND #sk BETWEEN :sk1 AND :sk2",
+    ExpressionAttributeNames: {
+      "#pk": "pk",
+      "#sk": "sk"
+    },
+    ExpressionAttributeValues: {
+      ":pk": input.channel,
+      ":sk1": "Connection#",
+      ":sk2": "Connection$"
+    }
+  };
+
+  return await ddb.query(queryParams).promise();
+};
+const pushToAllConnections = (connections: QueryOutput, input: Input) => {
   if(!connections?.Items) return [];
 
   const api = new AWS.ApiGatewayManagementApi({
@@ -128,6 +146,7 @@ const pushToAllConnections = (connections: ScanOutput, input: Input) => {
     }
   });  
 };
+
 const pushToConnection = async (api: AWS.ApiGatewayManagementApi, input: Input) => {
   const postRequest: PostToConnectionRequest = {
     ConnectionId: input.connectionId, 
@@ -151,3 +170,10 @@ export const getContentSk = (date: Date = new Date()) => {
 
   return `ChatLog#${correctDate.toISOString()}`;
 };
+
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
